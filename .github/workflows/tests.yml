@@ -2,7 +2,7 @@ name: OCI Auto Provision
 
 on:
   schedule:
-    # Tự động chạy mỗi 5 phút
+    # Tự động chạy định kỳ
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
@@ -27,7 +27,7 @@ jobs:
           echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
 
-      - name: Run Provisioning Script
+      - name: Run Provisioning Loop
         env:
           OCI_REGION: ${{ secrets.OCI_REGION }}
           OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
@@ -43,4 +43,26 @@ jobs:
           OCI_MAX_INSTANCES: 1
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
           TELEGRAM_BOT_API_KEY: ${{ secrets.TELEGRAM_BOT_API_KEY }}
-        run: php index.php
+        run: |
+          echo "🚀 Bắt đầu phiên quét liên tục 15 phút..."
+          END_TIME=$((SECONDS + 900))
+          COUNT=1
+
+          while [ $SECONDS -lt $END_TIME ]; do
+            echo "=========================================="
+            echo "--- Lượt quét #$COUNT lúc $(date '+%H:%M:%S') ---"
+            
+            OUTPUT=$(php index.php)
+            echo "$OUTPUT"
+
+            # Kiểm tra nếu tạo thành công hoặc đã có máy tồn tại
+            if echo "$OUTPUT" | grep -qi -E '"lifecycleState":\s*"(PROVISIONING|RUNNING)"|Already has'; then
+              echo "🎉 ĐÃ TẠO MÁY ẢO THÀNH CÔNG! DỪNG VÒNG LẶP."
+              exit 0
+            fi
+
+            COUNT=$((COUNT + 1))
+            echo "Chờ 25 giây cho lượt tiếp theo..."
+            sleep 25
+          done
+          echo "Hoàn thành phiên 15 phút."
